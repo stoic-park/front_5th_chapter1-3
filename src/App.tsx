@@ -1,6 +1,6 @@
 import React, { useState, createContext, useContext } from "react";
 import { generateItems, renderLog } from "./utils";
-import { memo, useMemo } from "./@lib";
+import { memo, useMemo, useCallback } from "./@lib";
 
 // 타입 정의
 interface Item {
@@ -22,19 +22,6 @@ interface Notification {
   type: "info" | "success" | "warning" | "error";
 }
 
-// AppContext 타입 정의
-// // TODO: context 분기 처리
-// interface AppContextType {
-//   theme: string;
-//   toggleTheme: () => void;
-//   user: User | null;
-//   login: (email: string, password: string) => void;
-//   logout: () => void;
-//   notifications: Notification[];
-//   addNotification: (message: string, type: Notification["type"]) => void;
-//   removeNotification: (id: number) => void;
-// }
-
 interface ThemeContextType {
   theme: string;
   toggleTheme: () => void;
@@ -52,22 +39,11 @@ interface NotificationContextType {
   removeNotification: (id: number) => void;
 }
 
-// const AppContext = createContext<AppContextType | undefined>(undefined);
-
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 const UserContext = createContext<UserContextType | undefined>(undefined);
 const NotificationContext = createContext<NotificationContextType | undefined>(
   undefined,
 );
-
-// 커스텀 훅: useAppContext
-// const useAppContext = () => {
-//   const context = useContext(AppContext);
-//   if (context === undefined) {
-//     throw new Error("useAppContext must be used within an AppProvider");
-//   }
-//   return context;
-// };
 
 const useThemeContext = () => {
   const context = useContext(ThemeContext);
@@ -98,7 +74,6 @@ const useNotificationContext = () => {
 // Header 컴포넌트
 export const Header: React.FC = memo(() => {
   renderLog("Header rendered");
-  // const { theme, toggleTheme, user, login, logout } = useAppContext();
   const { theme, toggleTheme } = useThemeContext();
   const { user, login, logout } = useUserContext();
 
@@ -149,7 +124,6 @@ export const ItemList: React.FC<{
 }> = memo(({ items, onAddItemsClick }) => {
   renderLog("ItemList rendered");
   const [filter, setFilter] = useState("");
-  // const { theme } = useAppContext();
   const { theme } = useThemeContext();
 
   const filteredItems = items.filter(
@@ -323,56 +297,52 @@ export const NotificationSystem: React.FC = memo(() => {
 // 메인 App 컴포넌트
 const App: React.FC = () => {
   const [theme, setTheme] = useState("light");
-  const [items, setItems] = useState(generateItems(1000));
+  const initialItems = useMemo(() => generateItems(1000), []);
+  const [items, setItems] = useState(initialItems);
   const [user, setUser] = useState<User | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
-  const toggleTheme = () => {
+  const toggleTheme = useCallback(() => {
     setTheme((prevTheme) => (prevTheme === "light" ? "dark" : "light"));
-  };
+  }, []);
 
-  const addItems = () => {
+  const addItems = useCallback(() => {
     setItems((prevItems) => [
       ...prevItems,
       ...generateItems(1000, prevItems.length),
     ]);
-  };
+  }, []);
 
-  const login = (email: string) => {
-    setUser({ id: 1, name: "홍길동", email });
-    addNotification("성공적으로 로그인되었습니다", "success");
-  };
+  const addNotification = useCallback(
+    (message: string, type: Notification["type"]) => {
+      const newNotification: Notification = {
+        id: Date.now(),
+        message,
+        type,
+      };
+      setNotifications((prev) => [...prev, newNotification]);
+    },
+    [],
+  );
 
-  const logout = () => {
-    setUser(null);
-    addNotification("로그아웃되었습니다", "info");
-  };
-
-  const addNotification = (message: string, type: Notification["type"]) => {
-    const newNotification: Notification = {
-      id: Date.now(),
-      message,
-      type,
-    };
-    setNotifications((prev) => [...prev, newNotification]);
-  };
-
-  const removeNotification = (id: number) => {
+  const removeNotification = useCallback((id: number) => {
     setNotifications((prev) =>
       prev.filter((notification) => notification.id !== id),
     );
-  };
+  }, []);
 
-  // const contextValue: AppContextType = {
-  //   theme,
-  //   toggleTheme,
-  //   user,
-  //   login,
-  //   logout,
-  //   notifications,
-  //   addNotification,
-  //   removeNotification,
-  // };
+  const login = useCallback(
+    (email: string) => {
+      setUser({ id: 1, name: "홍길동", email });
+      addNotification("성공적으로 로그인되었습니다", "success");
+    },
+    [addNotification],
+  );
+
+  const logout = useCallback(() => {
+    setUser(null);
+    addNotification("로그아웃되었습니다", "info");
+  }, [addNotification]);
 
   const themeContextValue = useMemo(
     () => ({ theme, toggleTheme }),
@@ -386,7 +356,7 @@ const App: React.FC = () => {
 
   const notificationContextValue = useMemo(
     () => ({ notifications, addNotification, removeNotification }),
-    [notifications],
+    [notifications, addNotification, removeNotification],
   );
 
   return (
